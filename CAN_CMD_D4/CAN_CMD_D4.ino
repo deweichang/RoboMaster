@@ -24,6 +24,9 @@ float dt, kp, ki, kd;
 int16_t error, previousError = 0, P, I, D;
 long previousMillis = 0;
 unsigned long currentMillis;
+
+volatile uint16_t old_ang[4], new_ang[4];
+//volatile int16_t vel[4][3] = {{0, 0 ,0},{0, 0 ,0},{0, 0 ,0},{0, 0 ,0}};
 //------------------------------------------------------------
 
 int16_t yawP = 0, yawI = 0, yawD = 0, pitchP = 0, pitchI = 0, pitchD = 0;
@@ -52,7 +55,7 @@ void setup() {
   rx_message.len = 8;
 
   //filter
-  CAN_filter();
+  //CAN_filter(); //--
 
   //timer shit
   myTimer.begin(Get_CMD, 1000);
@@ -63,7 +66,7 @@ void EncoderRead(){
   if (CANbus.available()){
     while(CANbus.read(rx_message)){
       curr_ang_cnts[rx_message.id-0x201]=(uint16_t)(rx_message.buf[0] << 8) + (uint16_t)rx_message.buf[1];
-      curr_vel_cnts[rx_message.id-0x201]=(uint16_t)(rx_message.buf[2] << 8) + (uint16_t)rx_message.buf[3];
+      curr_vel_cnts[rx_message.id-0x201]=(int16_t)(rx_message.buf[2] << 8) + (int16_t)rx_message.buf[3];
     }
   }
 }
@@ -94,6 +97,30 @@ void Set_GM_Speed(int16_t gimbal_yaw_iq, int16_t gimbal_pitch_iq)
   CANbus.write(tx_message_GM);
 }
 */
+
+float cal_vel(uint8_t motor_num) //need to consider the case when the count goes over 8191
+{
+  /*int16_t differ; 
+  float avgVel;
+  new_ang[motor_num]=curr_ang_cnts[motor_num]*360.0/8191;
+  differ= old_ang[motor_num]-new_ang[motor_num];
+  old_ang[motor_num]=new_ang[motor_num];
+  
+  vel[motor_num][0]= -differ/dt;
+  avgVel = (vel[motor_num][0]+vel[motor_num][1]+vel[motor_num][2])/3; //average filter
+  vel[motor_num][2] = vel[motor_num][1];
+  vel[motor_num][1] = vel[motor_num][0];
+  Serial.println(avgVel);
+  return avgVel;
+  */
+  int16_t differ, vel;
+  new_ang[motor_num]=curr_ang_cnts[motor_num]*360.0/8191;
+  differ= old_ang[motor_num]-new_ang[motor_num];
+  old_ang[motor_num]=new_ang[motor_num];
+  vel = -differ/dt;
+  //Serial.println(vel);
+  return vel;
+}
 
 //--------interrupt-----------------------------------------------
 
@@ -177,30 +204,55 @@ void Get_Dir(){
   omegaWheel2 = (wheel2y - (wheel2vb * sin(45 * pi / 180))) / wheelRadius;
   omegaWheel4 = (wheel3y - (wheel3vb * sin(45 * pi / 180))) / wheelRadius;
   omegaWheel3 = (wheel4y - (wheel4vb * sin(45 * pi / 180))) / wheelRadius;
-  sprintf(output, "w1: %f, w2: %f,w3: %f,w4: %f", omegaWheel1, omegaWheel2,omegaWheel4,omegaWheel3);
+  /*sprintf(output, "w1: %f, w2: %f,w3: %f,w4: %f", omegaWheel1, omegaWheel2,omegaWheel4,omegaWheel3);
   Serial.println(output);
   Serial.println(theta);
   Serial.println("");
+  */
   int16_t cm1_iq = -1000 * omegaWheel1 / 100;
   int16_t cm2_iq = 1000 * omegaWheel2 / 100;
   int16_t cm3_iq = 1000 * omegaWheel3 / 100;
   int16_t cm4_iq = -1000 * omegaWheel4 / 100;
-/*
+
   //update output with PID
-  cm1_iq = getPID(cm1_iq,curr_vel_cnts[0]); //need to use curr_ang_cnts[] to compute velocities
-  cm2_iq = getPID(cm2_iq,curr_vel_cnts[1]);
-  cm3_iq = getPID(cm3_iq,curr_vel_cnts[2]);
-  cm4_iq = getPID(cm4_iq,curr_vel_cnts[3]);
-  */
+  int16_t cm1_iq_tuned = getPID(cm1_iq,curr_vel_cnts[0]); //cal_vel(0)); //need to use curr_ang_cnts[] to compute velocities
+  int16_t cm2_iq_tuned = getPID(cm2_iq,curr_vel_cnts[1]);
+  int16_t cm3_iq_tuned = getPID(cm3_iq,curr_vel_cnts[2]);
+  int16_t cm4_iq_tuned = getPID(cm4_iq,curr_vel_cnts[3]);
+
+  Serial.print("Ref Output:     ");
+  Serial.print("cm1_iq: ");
+  Serial.print(cm1_iq);
+  Serial.print(" cm2_iq: ");
+  Serial.print(cm2_iq);
+  Serial.print(" cm3_iq: ");
+  Serial.print(cm3_iq);
+  Serial.print(" cm4_iq: ");
+  Serial.println(cm4_iq);
   
-  Set_CM_Speed(cm1_iq, cm2_iq, cm3_iq, cm4_iq);
+  Set_CM_Speed(cm1_iq_tuned, cm2_iq_tuned, cm3_iq_tuned, cm4_iq_tuned);
+  
+  Serial.print("Sensor Reading: ");
+  Serial.print("cm1_iq: ");
+  Serial.print(curr_vel_cnts[0]); //cal_vel(0
+  Serial.print(" cm2_iq: ");
+  Serial.print(curr_vel_cnts[1]);
+  Serial.print(" cm3_iq: ");
+  Serial.print(curr_vel_cnts[2]);
+  Serial.print(" cm4_iq: ");
+  Serial.println(curr_vel_cnts[3]); 
+  /*
+  cal_vel(0);
+  cal_vel(1);
+  cal_vel(2);
+  cal_vel(3);*/
 }
 
 int16_t getPID(int16_t desired, int16_t sensorReading){
   error = desired - sensorReading;
   kp = 1.0;
-  ki = 0;
-  kd = 0;
+  ki = 0.0;
+  kd = 0.0;
   P = kp*error;
   I += ki*error*dt;
   D = kd*(error - previousError) / dt;
