@@ -21,6 +21,17 @@ int16_t yawP = 0, yawI = 0, yawD = 0, pitchP = 0, pitchI = 0, pitchD = 0;
 
 int yaw_ang_ref = 335, pitch_ang_ref = 45;
 
+//IMU setup----------------------------------------------
+#include "MPU9250.h"
+
+// an MPU9250 object with its I2C address 
+// of 0x68 (ADDR to GRND) and on Teensy bus 0
+MPU9250 IMU(0x68, 0);
+
+//float ax, ay, az, gx, gy, gz, hx, hy, hz, t;
+float ax, ay, az, gx, gy, gz, hx, hy, hz, t;
+int beginStatus;
+
 //--timer setup------------------------------------------
 IntervalTimer myTimer;
 /*//remote control-----------------------------------------
@@ -53,6 +64,16 @@ void setup() {
 
   //timer shit
   myTimer.begin(main_loop, 10000);
+
+  //IMU
+  // serial to display data
+  Serial.begin(115200);
+
+  // start communication with IMU and 
+  // set the accelerometer and gyro ranges.
+  // ACCELEROMETER 2G 4G 8G 16G
+  // GYRO 250DPS 500DPS 1000DPS 2000DPS
+  beginStatus = IMU.begin(ACCEL_RANGE_4G,GYRO_RANGE_250DPS);
 }
 
 void Set_CM_Speed(int16_t gimbal_yaw_iq, int16_t gimbal_pitch_iq)
@@ -137,10 +158,11 @@ float angle_compute(int motor_id, int ang_ref, int k){
 }
 
 void ctrl_loop(int yaw, int pitch){
-  int16_t gimbal_yaw_iq = gimbalYawPID(yaw);
-  int16_t gimbal_pitch_iq = gimbalPitchPID(pitch);
-  //Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq);
-  Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq);
+  //int16_t gimbal_yaw_iq = gimbalYawPID(yaw);
+  //int16_t gimbal_pitch_iq = gimbalPitchPID(pitch);
+  int16_t gimbal_yaw_iq = CascadeControlYaw(yaw);
+  int16_t gimbal_pitch_iq = CascadeControlPitch(pitch);
+  Set_CM_Speed(gimbal_yaw_iq, 0); //gimbal_pitch_iq
 
 /*
   float ang_act_yaw=curr_ang_cnts[4]*360.0/8191;
@@ -185,31 +207,28 @@ void ctrl_loop(int yaw, int pitch){
   Serial.print(" Total: ");
   Serial.println(pitchP + pitchI + pitchD);
   Serial.println("");
-  /*
-  Serial.print("ang_diff_yaw: ");
-  Serial.print(ang_diff_yaw);
-  Serial.print(" ");
-  Serial.print("ang_act_yaw: ");
-  Serial.print(ang_act_yaw);
-  Serial.print(" ");
-  Serial.print("ang_diff_pitch: ");
-  Serial.print(ang_diff_pitch);
-  Serial.print(" ");
+
+}
+
+void IMUread(){
+  if(beginStatus < 0) {
+    delay(1000);
+    Serial.println("IMU initialization unsuccessful");
+    Serial.println("Check IMU wiring or try cycling power");
+    delay(10000);
+  }
+  else{
+    IMU.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
   
-  Serial.print("ang_act_pitch: ");
-  Serial.print(ang_act_pitch);
-  Serial.print(" ");
-  Serial.print((float)gimbal_yaw_iq);
-  Serial.print(" ");
-  Serial.print((float)gimbal_pitch_iq);
-  Serial.print(" ");
-  Serial.print(yawP);
-  Serial.print(" ");
-  Serial.print(yawI);
-  Serial.print(" ");
-  Serial.print(yawD);
-  Serial.print("\n");
-  */
+    /*Serial.print(gx,6);
+    Serial.print("\t");
+    Serial.print(gy,6);
+    Serial.print("\t");
+    Serial.print(gz,6);
+    Serial.print("\n");*/
+    
+    delay(50);
+  }
 }
 
 void main_loop(){
