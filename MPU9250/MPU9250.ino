@@ -19,13 +19,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 */
 
 #include "MPU9250.h"
+//#include <Filters.h>
 
 // an MPU9250 object with its I2C address 
 // of 0x68 (ADDR to GRND) and on Teensy bus 0
 MPU9250 IMU(0x68, 0);
 
 float ax, ay, az, gx, gy, gz, hx, hy, hz, t;
+float gx_new = 0, gy_new = 0, gz_new = 0, gx_prev = 0, gy_prev = 0, gz_prev = 0;
+float gx_fil, gy_fil, gz_fil;
+float gxx[3] = {0, 0, 0};
 int beginStatus;
+float filterFrequency = 10000.0;
 
 void setup() {
   // serial to display data
@@ -91,6 +96,31 @@ void loop() {
   
     // get the temperature data (C)
     //IMU.getTemp(&t);
+
+    //Exponential fiter
+    /*gx_new = 0.7*gx + 0.3*gx_prev;
+    gy_new = 0.7*gy + 0.3*gy_prev;
+    gz_new = 0.7*gz + 0.3*gz_prev;
+    gx_prev = gx_new;
+    gy_prev = gy_new;
+    gz_prev = gz_new;*/
+    
+    //FilterOnePole lowpassFilter( LOWPASS, filterFrequency );
+    /*gxx = gx;
+    gyy = gy;
+    gzz = gz;
+    gx_fil = lowpassFilter.input(gxx);
+    gy_fil = lowpassFilter.input(gyy);
+    gz_fil = lowpassFilter.input(gzz);*/
+
+    //moving average filter
+    gxx[0] = gx;
+    gx_fil = (gxx[0] + gxx[1] + gxx[2]) / 3;
+    gxx[2] = gxx[1];
+    gxx[1] = gxx[0];
+
+    
+
   
     // print the data
     printData();
@@ -145,13 +175,15 @@ void printData(){
   Serial.print("\t");
   Serial.print(az,6);
   Serial.print("\t");*/
-
-  Serial.print(gx,6);
+  double pi = 4*atan(1);
+  Serial.print(gx_fil*180/pi,6);
   Serial.print("\t");
-  Serial.print(gy,6);
+  Serial.print(gx*180/pi,6);
+  Serial.println("");
+  /*Serial.print(gy_new,6);
   Serial.print("\t");
-  Serial.print(gz,6);
-  Serial.print("\n");
+  Serial.print(gz_new,6);
+  Serial.print("\n");*/
 /*
   Serial.print(hx,6);
   Serial.print("\t");
