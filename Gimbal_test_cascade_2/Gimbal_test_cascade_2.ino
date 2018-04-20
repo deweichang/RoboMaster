@@ -4,14 +4,13 @@
 #include "FlexCAN.h"
 //#include "RemoteControl.h"
 //------------DEFINE VARIABLES---------------------------------------------
-const float pi = 4.0 * atan(1);
+const float pi = 4.0 * atan(1); //define PI = 3.1415926
 const int baudRate = 1000000;
-int16_t gimbal_yaw_iq = 0;
-int16_t gimbal_pitch_iq = 0;
+int16_t gimbal_yaw_iq = 0, gimbal_pitch_iq = 0; //declare gimbal_iq --> motor speed command
 uint16_t curr_ang_cnts[6] = {0, 0, 0, 0, 0, 0};
 uint16_t curr_vel_cnts[6] = {0, 0, 0, 0, 0, 0};
 int LoopPeriod = 1000;// * microsecond
-long previousMillis = 0;
+long previousMillis = 0; //used to calculate dt
 unsigned long currentMillis;
 float dt;
 int prev_yaw_ang_diff = 0, prev_pitch_ang_diff = 0;
@@ -24,6 +23,15 @@ float pos_output[2] = {0, 0};
 float gxx[3] = {0, 0, 0}, gzz[3] = {0, 0, 0};
 float gx_fil = 0, gz_fil = 0;
 int yaw_ang_ref = 335, pitch_ang_ref = 45;
+//-------------------Finite State Machine---------------------------
+const int Initial = 100;
+const int Horizontal = 101;
+const int Vertical = 102;
+int state = Initial;
+char readIn;
+int counter = 0;
+int yawMove = 335, pitchMove = 45;
+int horDir = 1, verDir = -1;
 //-------------------CANBUS SET UP--------------------------
 FlexCAN CANbus(baudRate, 1);
 static CAN_message_t tx_message, rx_message;
@@ -93,6 +101,11 @@ void debug() {
   //Serial.print("  gz: ");  Serial.println(gz_fil / pi * 180, 3);
   //Serial.print("  dt: ");  Serial.println(dt*1000);
 }
+
+char serialRead() {
+
+}
+
 //-------------------------------MAIN LOGIC(TIMER)----------------------------------------------------------------------
 void EncoderRead() {
   if (CANbus.available()) {
@@ -106,9 +119,88 @@ void loop()
 {
   //currentMillis = millis();
   IMURead();//Read IMU information
-  Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq); //Output everything
+  ////Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq); //Output everything
   dt = 0.001;//(currentMillis - previousMillis) * 0.001;
-  ctrl_loop(yaw_ang_ref, pitch_ang_ref); // Calculate for the control effort, prepare the outputs
+  ////ctrl_loop(yaw_ang_ref, pitch_ang_ref); // Calculate for the control effort, prepare the outputs
+
+//-----------------------------------comment from me and uncomment ////lines to recover to orginal one
+  if (Serial.available()) {
+    readIn = Serial.read(); //type an character in serial monitor
+  }
+
+//you have to be in Initial state (Press i) to go into Horizontal (Press h) or Vertival state (Press v)
+  switch (state) {
+    case Initial: //initial status --> pointing forward with barrel lifting in the middle
+      ctrl_loop(335, 45);
+      if (readIn == 'h') {
+        state = Horizontal;
+      }
+      else if (readIn == 'v'){
+        state = Vertical;
+      }
+      break;
+
+    case Horizontal:
+      ctrl_loop(yawMove, 45);
+      counter ++;
+      //increment by 5 degree every second
+      if (counter == 1000) {
+        yawMove += horDir * 5;
+        counter = 0;
+      }
+      //connecting upper limit and lower limit of the encoder
+      if (yawMove == 365) {
+        yawMove = 0;
+      }
+      if (yawMove == -5) {
+        yawMove = 360;
+      }
+      //change direction when approaching limit (90 deg)
+      if (horDir == 1 && yawMove == 65) {
+        horDir = -1;
+      }
+      else if (horDir == -1 && yawMove == 245) {
+        horDir = 1;
+      }
+
+      if (readIn == 'i') {
+        yawMove = 335; horDir = 1; counter = 0; //reset every global variable
+        state = Initial;
+      }
+      break;
+
+    case Vertical:
+      ctrl_loop(335, pitchMove);
+      counter++;
+      //increment by 5 degree per second
+      if (counter == 1000) {
+        pitchMove += verDir * 5;
+        counter = 0;
+      }
+      //connecting upper limit and lower limit of the encoder
+      if (pitchMove == 365) {
+        pitchMove = 0;
+      }
+      if (pitchMove == -5) {
+        pitchMove = 360;
+      }
+      //change direction when approaching limit (90 deg)
+      if (verDir == 1 && pitchMove == 65) {
+        verDir = -1;
+      }
+      else if (verDir == -1 && pitchMove == 5) {
+        verDir = 1;
+      }
+
+      if (readIn == 'i') {
+        pitchMove = 45; verDir = 1; counter = 0; //reset every global variable
+        state = Initial;
+      }
+      break;
+  }
+  Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq);
+//-----------------------------------comment to me and uncomment ////lines to recover to orginal one
   debug();
   //previousMillis = currentMillis;
+
 }

@@ -1,4 +1,5 @@
-
+//posP, posI, posD, pos_output, and prev_pos_error are global variable arrays, 0 stands for YAW,...
+//1 stands for PITCH
 
 
 float CascadeControlYaw(float pos_setpoint_yaw) {
