@@ -2,6 +2,9 @@
 #include <math.h>
 #include "MPU9250.h"
 #include "FlexCAN.h"
+//#include <Wire.h>
+#include "I2C.h"
+
 //#include "RemoteControl.h"
 //------------DEFINE VARIABLES---------------------------------------------
 const float pi = 4.0 * atan(1); //define PI = 3.1415926
@@ -23,6 +26,8 @@ float pos_output[2] = {0, 0};
 float gxx[3] = {0, 0, 0}, gzz[3] = {0, 0, 0};
 float gx_fil = 0, gz_fil = 0;
 int yaw_ang_ref = 335, pitch_ang_ref = 45;
+float yaw_pos_error[4] = {0, 0, 0, 0};
+float pitch_pos_error[4] = {0, 0, 0, 0};
 //-------------------Finite State Machine---------------------------
 const int Initial = 100;
 const int Horizontal = 101;
@@ -72,8 +77,9 @@ void IMURead() {
   }
   else {
     IMU.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-    gxx[0] = gx; gx_fil = (gxx[0] + gxx[1] + gxx[2]) / 3; gxx[2] = gxx[1]; gxx[1] = gxx[0];
+    gxx[0] = gx; gx_fil = 0.5*gxx[0] + 0.3*gxx[1] + 0.2*gxx[2]; gxx[2] = gxx[1]; gxx[1] = gxx[0];
     gzz[0] = gz; gz_fil = (gzz[0] + gzz[1] + gzz[2]) / 3; gzz[2] = gzz[1]; gzz[1] = gzz[0];
+    //gxx[0] = gx; gx_fil = (gxx[0] + gxx[1] + gxx[2]) / 3; gxx[2] = gxx[1]; gxx[1] = gxx[0];
   }
 }
 void ctrl_loop(int yaw, int pitch) {
@@ -96,15 +102,13 @@ void Set_CM_Speed(int16_t gimbal_yaw_iq, int16_t gimbal_pitch_iq)
 void debug() {
   //Serial.print("  Des_vel: ");  Serial.println(pos_output[1]);
   Serial.print("  Ctrl u: ");  Serial.print(gimbal_pitch_iq);
-  Serial.print("  Pos Error: ");  Serial.println((float)prev_pos_error[1]);
+  //Serial.print("  Pos Error: ");  Serial.print(pitch_pos_error[0]);
+  Serial.print(" pos_output[1] "); Serial.println(pos_output[1]);
   //Serial.print("  Pitch_Vel: ");  Serial.println(gx_fil / pi * 180, 3);
   //Serial.print("  gz: ");  Serial.println(gz_fil / pi * 180, 3);
   //Serial.print("  dt: ");  Serial.println(dt*1000);
 }
 
-char serialRead() {
-
-}
 
 //-------------------------------MAIN LOGIC(TIMER)----------------------------------------------------------------------
 void EncoderRead() {
@@ -141,10 +145,10 @@ void loop()
       break;
 
     case Horizontal:
-      ctrl_loop(yawMove, 45);
+      /*ctrl_loop(yawMove, 45);
       counter ++;
       //increment by 5 degree every second
-      if (counter == 1000) {
+      if (counter == 300) {
         yawMove += horDir * 5;
         counter = 0;
       }
@@ -161,19 +165,23 @@ void loop()
       }
       else if (horDir == -1 && yawMove == 245) {
         horDir = 1;
-      }
+      }*/
+      ctrl_loop(270, 45);
 
       if (readIn == 'i') {
         yawMove = 335; horDir = 1; counter = 0; //reset every global variable
         state = Initial;
       }
+      else if (readIn == 'v'){
+        state = Vertical;
+      }
       break;
 
     case Vertical:
-      ctrl_loop(335, pitchMove);
+      /*ctrl_loop(335, pitchMove);
       counter++;
       //increment by 5 degree per second
-      if (counter == 1000) {
+      if (counter == 500) {
         pitchMove += verDir * 5;
         counter = 0;
       }
@@ -190,11 +198,15 @@ void loop()
       }
       else if (verDir == -1 && pitchMove == 5) {
         verDir = 1;
-      }
+      }*/
+      ctrl_loop(25,45);
 
       if (readIn == 'i') {
         pitchMove = 45; verDir = 1; counter = 0; //reset every global variable
         state = Initial;
+      }
+      else if (readIn == 'h'){
+        state = Horizontal;
       }
       break;
   }
