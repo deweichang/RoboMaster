@@ -54,7 +54,7 @@ float CascadeControlYaw(float pos_setpoint_yaw) {
 float CascadeControlPitch(float pos_setpoint_pitch) {
   float pos_kp = 3;
   float pos_ki = 0; //0
-  float pos_kd = 0.5; //0.3 //0.5
+  float pos_kd = 0.5; //0.3 
   int cnt_ref = (int)pos_setpoint_pitch * 8191.0 / 360;
   int pos_error = (cnt_ref - curr_ang_cnts[5] + 4096) % 8191 - 4096; //error = ref - reading
 

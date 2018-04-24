@@ -77,7 +77,7 @@ void IMURead() {
   }
   else {
     IMU.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-    gxx[0] = gx; gx_fil = 0.5*gxx[0] + 0.3*gxx[1] + 0.2*gxx[2]; gxx[2] = gxx[1]; gxx[1] = gxx[0];
+    gxx[0] = gx; gx_fil = 0.5*gxx[0] + 0.3*gxx[1] + 0.2*gxx[2]; gxx[2] = gxx[1]; gxx[1] = gxx[0]; //moving average filter
     gzz[0] = gz; gz_fil = (gzz[0] + gzz[1] + gzz[2]) / 3; gzz[2] = gzz[1]; gzz[1] = gzz[0];
     //gxx[0] = gx; gx_fil = (gxx[0] + gxx[1] + gxx[2]) / 3; gxx[2] = gxx[1]; gxx[1] = gxx[0];
   }
