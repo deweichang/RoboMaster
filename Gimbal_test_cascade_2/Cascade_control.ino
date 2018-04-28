@@ -4,21 +4,28 @@
 
 float CascadeControlYaw(float pos_setpoint_yaw) {
   float pos_kp = 1.7;
-  float pos_ki = 1.2;
-  float pos_kd = 0.5; //0.12
+  float pos_ki = 2.0; //2
+  float pos_kd = 0.7; //0.12 //0.5
   int cnt_ref = (int)pos_setpoint_yaw * 8191.0 / 360;
-  int pos_error = (cnt_ref - curr_ang_cnts[4] + 4096) % 8191 - 4096; //error = ref - reading
+  int pos_error = (cnt_ref - curr_ang_cnts[4]);// + 4096) % 8191 - 4096; //error = ref - reading
 
   /*yaw_pos_error[1] = pos_error; 
   yaw_pos_error[0] = 0.5*yaw_pos_error[1] + 0.3*yaw_pos_error[2] + 0.2*yaw_pos_error[3];
   yaw_pos_error[3] = yaw_pos_error[2]; yaw_pos_error[2] = yaw_pos_error[1];*/
 
   if (pos_error > 4096) {
-    pos_error -= 8191;
+    pos_error -= 8192;
   }
   else if (pos_error < -4096) {
-    pos_error += 8191;
+    pos_error += 8192;
   }
+
+  if ( abs(pos_error) < 50) {
+    pos_kp = 5;
+    pos_ki = 5.0;
+    pos_kd = 0.09;//0.09;
+  }
+  
   //-----------------------------------------------------------------------
   //PID Cal
   posP[0] = pos_kp * pos_error;
@@ -41,56 +48,47 @@ float CascadeControlYaw(float pos_setpoint_yaw) {
 
   int16_t vel_output = velP[0] + velI[0];
   //Saturation (prevent it moving too fast)
-  if (vel_output > 800){
-    vel_output = 800;
+  if (vel_output > 1200){
+    vel_output = 1200;
   }
-  else if (vel_output < -800){
-    vel_output = -800;
+  else if (vel_output < -1200){
+    vel_output = -1200;
   }
-  
+  //vel_output = -90;
   return vel_output;
 }
 
 float CascadeControlPitch(float pos_setpoint_pitch) {
-  float pos_kp = 3;
-  float pos_ki = 0; //0
-  float pos_kd = 0.5; //0.3 
+  float pos_kp = 3.0; //3
+  float pos_ki = 0.0; //0
+  float pos_kd = 0.3; //0.3 
   int cnt_ref = (int)pos_setpoint_pitch * 8191.0 / 360;
-  int pos_error = (cnt_ref - curr_ang_cnts[5] + 4096) % 8191 - 4096; //error = ref - reading
+  int pos_error = (cnt_ref - curr_ang_cnts[5]); // + 4096) % 8191 - 4096; //error = ref - reading
 
-  pitch_pos_error[1] = pos_error; 
+  /*pitch_pos_error[1] = pos_error; 
   pitch_pos_error[0] = 0.5*pitch_pos_error[1] + 0.3*pitch_pos_error[2] + 0.2*pitch_pos_error[3];
-  pitch_pos_error[3] = pitch_pos_error[2]; pitch_pos_error[2] = pitch_pos_error[1];
+  pitch_pos_error[3] = pitch_pos_error[2]; pitch_pos_error[2] = pitch_pos_error[1];*/
 
   if (pos_error > 4096) {
-    pos_error -= 8191;
+    pos_error -= 8192;
   }
   else if (pos_error < -4096) {
-    pos_error += 8191;
+    pos_error += 8192;
   }
   //-----------------------------------------------------------------------
   //PID Cal
   if ( abs(pos_error) < 50) {
     pos_kp = 5;
-    pos_ki = 7;
-    pos_kd = 0.09;
+    pos_ki = 7; //7
+    pos_kd = 0.05;//0.09;
   }
-  /*if (gx_fil > 10) {
-    pos_kp = 0;
-    pos_ki = 0;
-    pos_kd = 0;
-    }
-    if (gx_fil < -10) {
-    pos_kp = 0;
-    pos_ki = 0;
-    pos_kd = 0;
-    }*/
-  posP[1] = pos_kp * pitch_pos_error[0];
-  posI[1] += pos_ki * pitch_pos_error[0] * dt;
-  posD[1] = pos_kd * (pitch_pos_error[0] - prev_pos_error[1]) / dt;
+
+  posP[1] = pos_kp * pos_error;
+  posI[1] += pos_ki * pos_error * dt;
+  posD[1] = pos_kd * (pos_error - prev_pos_error[1]) / dt;
 
 
-  prev_pos_error[1] = pitch_pos_error[0];
+  prev_pos_error[1] = pos_error;
   pos_output[1] = posP[1] + posI[1] + posD[1];
   /*if (pos_output[1] > 200) {
     pos_output[1] = 200;

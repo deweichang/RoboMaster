@@ -12,7 +12,7 @@ const int baudRate = 1000000;
 int16_t gimbal_yaw_iq = 0, gimbal_pitch_iq = 0; //declare gimbal_iq --> motor speed command
 uint16_t curr_ang_cnts[6] = {0, 0, 0, 0, 0, 0};
 uint16_t curr_vel_cnts[6] = {0, 0, 0, 0, 0, 0};
-int LoopPeriod = 1000;// * microsecond
+int LoopPeriod = 1000;// * microsecond  //Hz
 long previousMillis = 0; //used to calculate dt
 unsigned long currentMillis;
 float dt;
@@ -20,9 +20,10 @@ int prev_yaw_ang_diff = 0, prev_pitch_ang_diff = 0;
 int prev_yaw_cnt_diff = 0, prev_pitch_cnt_diff = 0;
 int prev_yaw_cnt_diff2 = 0, prev_pitch_cnt_diff2 = 0;
 int prev_cnt_diff = 0;
-int16_t posP[2] = {0, 0}, posI[2] = {0, 0}, posD[2] = {0, 0}, velP[2] = {0, 0}, velI[2] = {0, 0};
-int prev_pos_error[2] = {0, 0};
+float posP[2] = {0, 0}, posI[2] = {0, 0}, posD[2] = {0, 0}, velP[2] = {0, 0}, velI[2] = {0, 0}; //int16_t
+float prev_pos_error[2] = {0, 0}, prev_pos_error2[2] = {0, 0}, prev_vel_error[2] = {0, 0};
 float pos_output[2] = {0, 0};
+int16_t prev_vel_output = 0;
 float gxx[3] = {0, 0, 0}, gzz[3] = {0, 0, 0};
 float gx_fil = 0, gz_fil = 0;
 int yaw_ang_ref = 335, pitch_ang_ref = 45;
@@ -77,14 +78,15 @@ void IMURead() {
   }
   else {
     IMU.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
-    gxx[0] = gx; gx_fil = 0.5*gxx[0] + 0.3*gxx[1] + 0.2*gxx[2]; gxx[2] = gxx[1]; gxx[1] = gxx[0]; //moving average filter
+    //gxx[0] = gx; gx_fil = 0.5*gxx[0] + 0.3*gxx[1] + 0.2*gxx[2]; gxx[2] = gxx[1]; gxx[1] = gxx[0]; //moving average filter
+    gx_fil = butterworthFilter(gx); //gxx[1] = gx_fil;
     gzz[0] = gz; gz_fil = (gzz[0] + gzz[1] + gzz[2]) / 3; gzz[2] = gzz[1]; gzz[1] = gzz[0];
     //gxx[0] = gx; gx_fil = (gxx[0] + gxx[1] + gxx[2]) / 3; gxx[2] = gxx[1]; gxx[1] = gxx[0];
   }
 }
 void ctrl_loop(int yaw, int pitch) {
-  gimbal_yaw_iq = CascadeControlYaw(yaw);
-  gimbal_pitch_iq = CascadeControlPitch(pitch);
+  gimbal_yaw_iq = CascadeControlYaw2(yaw);
+  gimbal_pitch_iq = CascadeControlPitch2(pitch);
 }
 
 void Set_CM_Speed(int16_t gimbal_yaw_iq, int16_t gimbal_pitch_iq)
@@ -100,12 +102,26 @@ void Set_CM_Speed(int16_t gimbal_yaw_iq, int16_t gimbal_pitch_iq)
   CANbus.write(tx_message);
 }
 void debug() {
-  //Serial.print("  Des_vel: ");  Serial.println(pos_output[1]);
+  //Serial.print("  Encoder: "); Serial.print(curr_ang_cnts[5]);
+  /*Serial.print("  YAW Pos Error: ");  Serial.print(prev_pos_error[0]);
+  Serial.print("  PosP: "); Serial.print(posP[0]);
+  Serial.print("  PosI: "); Serial.print(posI[0]);
+  Serial.print("  PosD: "); Serial.print(posD[0]);
+  Serial.print("  Des_vel: ");  Serial.print(pos_output[0]);
+  Serial.print("  Ctrl u: "); Serial.println(gimbal_yaw_iq);*/
+  
+  Serial.print("  PIT Pos Error: ");  Serial.print(prev_pos_error[1]);
+  Serial.print("  PosP: "); Serial.print(posP[1]);
+  Serial.print("  PosI: "); Serial.print(posI[1]);
+  Serial.print("  PosD: "); Serial.print(posD[1]);
+  Serial.print("  Des_vel: ");  Serial.print(pos_output[1]);
   Serial.print("  Ctrl u: ");  Serial.print(gimbal_pitch_iq);
-  //Serial.print("  Pos Error: ");  Serial.print(pitch_pos_error[0]);
-  Serial.print(" pos_output[1] "); Serial.println(pos_output[1]);
+  Serial.print("  gx: ");  Serial.println(gx_fil / pi * 180, 3);
+  Serial.println(" ");
+  
+  //Serial.print(" pos_output[1] "); Serial.print(pos_output[1]);
   //Serial.print("  Pitch_Vel: ");  Serial.println(gx_fil / pi * 180, 3);
-  //Serial.print("  gz: ");  Serial.println(gz_fil / pi * 180, 3);
+  //Serial.print("  gx: ");  Serial.println(gx_fil / pi * 180, 3);
   //Serial.print("  dt: ");  Serial.println(dt*1000);
 }
 
@@ -145,28 +161,28 @@ void loop()
       break;
 
     case Horizontal:
-      /*ctrl_loop(yawMove, 45);
+      ctrl_loop(yawMove, 45);
       counter ++;
       //increment by 5 degree every second
       if (counter == 300) {
-        yawMove += horDir * 5;
+        yawMove += horDir * 10;
         counter = 0;
       }
       //connecting upper limit and lower limit of the encoder
-      if (yawMove == 365) {
+      if (yawMove >= 365) { //==
         yawMove = 0;
       }
-      if (yawMove == -5) {
+      if (yawMove <= -5) { //==
         yawMove = 360;
       }
       //change direction when approaching limit (90 deg)
-      if (horDir == 1 && yawMove == 65) {
+      if (horDir == 1 && yawMove == 60) { //65
         horDir = -1;
       }
-      else if (horDir == -1 && yawMove == 245) {
+      else if (horDir == -1 && yawMove == 240) { //245
         horDir = 1;
-      }*/
-      ctrl_loop(270, 45);
+      }
+      //ctrl_loop(270, 45);
 
       if (readIn == 'i') {
         yawMove = 335; horDir = 1; counter = 0; //reset every global variable
@@ -178,10 +194,10 @@ void loop()
       break;
 
     case Vertical:
-      /*ctrl_loop(335, pitchMove);
+      ctrl_loop(335, pitchMove);
       counter++;
       //increment by 5 degree per second
-      if (counter == 500) {
+      if (counter == 300) {
         pitchMove += verDir * 5;
         counter = 0;
       }
@@ -198,8 +214,8 @@ void loop()
       }
       else if (verDir == -1 && pitchMove == 5) {
         verDir = 1;
-      }*/
-      ctrl_loop(25,45);
+      }
+      //ctrl_loop(25,45);
 
       if (readIn == 'i') {
         pitchMove = 45; verDir = 1; counter = 0; //reset every global variable
@@ -210,7 +226,7 @@ void loop()
       }
       break;
   }
-  Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq);
+  Set_CM_Speed(gimbal_yaw_iq, gimbal_pitch_iq); 
 //-----------------------------------comment to me and uncomment ////lines to recover to orginal one
   debug();
   //previousMillis = currentMillis;
