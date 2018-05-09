@@ -9,6 +9,9 @@ int16_t cm1_iq = 0;
 int16_t cm2_iq = 0;
 int16_t cm3_iq = 0;
 int16_t cm4_iq = 0;
+
+uint16_t curr_ang_cnts[6] = {0, 0, 0, 0, 0, 0};
+uint16_t curr_vel_cnts[6] = {0, 0, 0, 0, 0, 0};
 //--timer setup------------------------------------------
 IntervalTimer myTimer;
 //remote control-----------------------------------------
@@ -179,26 +182,46 @@ void Get_Dir() {
   Serial.println(output);
   Serial.println(theta);
   Serial.println("");
-  int16_t cm1_iq = -1000 * omegaWheel1 / 100;
-  int16_t cm2_iq = 1000 * omegaWheel2 / 100;
-  int16_t cm3_iq = 1000 * omegaWheel3 / 100;
-  int16_t cm4_iq = -1000 * omegaWheel4 / 100;
+  int16_t cm1_iq = -4000 * omegaWheel1 / 100; //infantry: 1000, engineer: 2000, hero: 4000
+  int16_t cm2_iq = 4000 * omegaWheel2 / 100;
+  int16_t cm3_iq = 4000 * omegaWheel3 / 100;
+  int16_t cm4_iq = -4000 * omegaWheel4 / 100;
   Set_CM_Speed(cm1_iq, cm2_iq, cm3_iq, cm4_iq);
+  //Set_CM_Speed(-1000, 1000, 1000, -1000);
   
 
 
 }
 
+void EncoderRead(){
+  if (CANbus.available()){
+    while(CANbus.read(rx_message)){
+      curr_ang_cnts[rx_message.id-0x201]=(uint16_t)(rx_message.buf[0] << 8) + (uint16_t)rx_message.buf[1];
+      curr_vel_cnts[rx_message.id-0x201]=(int16_t)(rx_message.buf[2] << 8) + (int16_t)rx_message.buf[3];
+    }
+  }
+}
+
 void loop()
 {
   Get_Dir();
+  EncoderRead();
   delay(50);
-  Serial.print(RC_CtrlData.rc.ch2);
+  /*Serial.print(RC_CtrlData.rc.ch2);
   Serial.print(" ");
   Serial.print(RC_CtrlData.rc.ch3);
   Serial.print(" ");
   Serial.print(RC_CtrlData.rc.ch0);
-  Serial.println("\n");
+  Serial.println("\n");*/
+
+  Serial.print("1: ");
+  Serial.print(curr_vel_cnts[0]);
+  Serial.print("  2: ");
+  Serial.print(curr_vel_cnts[1]);
+  Serial.print("  3: ");
+  Serial.print(curr_vel_cnts[2]);
+  Serial.print("  4: ");
+  Serial.println(curr_vel_cnts[3]);
   
   /*
     int16_t cm1_iq = -1000 * Ctrl_Gain / 100;
